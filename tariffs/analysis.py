@@ -4,7 +4,8 @@ from fredapi import Fred
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import statsmodels.api as sm
+import plotly.io as pio
+pio.renderers.default = "notebook"
 #%%
 with open("fred_api.json",'r') as fred_api:
     file_contents = fred_api.read()
@@ -32,37 +33,23 @@ fred_df['month'] = fred_df['index'].dt.month
 fred_df['year'] = fred_df['index'].dt.year
 fred_df = fred_df[fred_df.month==12]
 fred_df = fred_df.sort_values(['year'],ascending=True)
-fred_df['inflation_rate'] = fred_df['cpi'].pct_change() * 100
-fred_df['gdp_growth'] = fred_df['gdp'].pct_change()*100
-fred_df['consumer_confidence_growth'] = fred_df['consumer_confidence'].pct_change()*100
-fred_df['unemployment_rate_growth'] = fred_df['unemployment_rate'].pct_change()*100
-fred_df['cpi_growth'] = fred_df['cpi'].pct_change()*100
-fred_df['r3_gdp_growth'] = fred_df['gdp_growth'].rolling(3).mean()
-fred_df['r5_gdp_growth'] = fred_df['gdp_growth'].rolling(5).mean()
-fred_df['r10_gdp_growth'] = fred_df['gdp_growth'].rolling(10).mean()
 tariffs = pd.read_csv('data-2dFbJ.csv')
 tariffs.columns =  [col.lower() for col in tariffs.columns]
 joined = fred_df.merge(tariffs,on='year',how='inner').set_index('year')
 main = joined.copy()
-main['tariff_diff'] = main['tariff_rate'].pct_change() * 100
-main['r3_tariffs'] = main['tariff_rate'].rolling(3).mean()
-main['r5_tariffs'] = main['tariff_rate'].rolling(5).mean()
-main['r10_tariffs'] = main['tariff_rate'].rolling(10).mean()
-#main = main.drop(columns=['index'])
-# %%
+main = main.drop(columns=['tariff_rate_no_ieepa'])
+# go.Figure(data=[go.Table(header=dict(values=main[['cpi', 'unemployment_rate', 'consumer_confidence', 'gdp']]),
+#                  cells=dict(values=[main[f'{col}'] for col in [['cpi', 'unemployment_rate', 'consumer_confidence', 'gdp']]]))
+#                      ])#%%
 
-go.Figure(data=[go.Table(header=dict(values=joined.columns),
-                 cells=dict(values=[joined[f'{col}'] for col in joined.columns]))
-                     ])
 #%%
 px.imshow(main.drop(columns=['index','month']).corr(),text_auto=True,aspect='auto')
 # %%
 independents = [col for col in main.columns if 'tariff' in col and 'diff' not in col and 'ieepa' not in col]
-dependents = [col for col in main.columns if 'gdp' in col or col in ['cpi_growth', 'unemployment_rate_growth', 'consumer_confidence_growth'] and col!='gdp']
+dependents = [col for col in main.columns if col in ['cpi', 'unemployment_rate', 'consumer_confidence','gdp']]
 model_df = main.dropna()
+model_df[dependents].describe()
 for dep in dependents:
     for ind in independents:
-        mod = sm.OLS(model_df[dep], model_df[ind],hasconst=False)
-        res = mod.fit()
-        print(res.summary()) 
+        px.scatter(model_df,ind,dep,trendline='ols').show()
 # %%
